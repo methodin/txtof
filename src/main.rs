@@ -1,7 +1,10 @@
-use std::io::{self, Read};
+use std::collections::BTreeMap;
 use std::env;
-use std::fmt;
 use std::fs::File;
+use std::io::{self, Read};
+use handlebars::Handlebars;
+
+extern crate handlebars;
 
 struct Col {
     pub buffers: Vec<String>
@@ -96,6 +99,38 @@ struct Template {
     button: String
 }
 
+struct Working {
+    str: String,
+    until: char,
+    template: String
+}
+impl Working {
+    fn new(until: char, template: &String) -> Working {
+        Working {
+            str: String::new(),
+            until: until,
+            template: template.clone()
+        }
+    }
+    fn is_working(&self) -> bool {
+        self.until != '\0'
+    }
+    fn append(&mut self, chr: char) {
+        self.str.push(chr);
+    }
+    fn compile(&self) -> String {
+        // Compile template
+        let mut handlebars = Handlebars::new();
+        assert!(handlebars.register_template_string("tmpl", self.template.as_str())
+            .is_ok());
+
+        // Bind data to template
+        let mut data = BTreeMap::new();
+        data.insert("value".to_string(), &self.str);
+        handlebars.render("tmpl", &data).unwrap()
+    }
+}
+
 /** 
  * An empty line implies a new "row"
  * A line starting with a | implies a columnar form section
@@ -126,7 +161,7 @@ fn main() {
             let template_file = format!("{}/{}", dir.display(), file);
 
             let mut in_file = match File::open(&template_file) {
-                Err(why) => panic!("Unable to open template file"),
+                Err(_) => panic!("Unable to open template file"),
                 Ok(file) => file,
             };
 
@@ -150,8 +185,8 @@ fn main() {
                 checkbox: sp[6].to_string().trim().to_string(),
                 radio: sp[7].to_string().trim().to_string(),
                 textarea: sp[8].to_string().trim().to_string(),
-                hr: sp[9].to_string().trim().to_string(),
-                button: sp[10].to_string().trim().to_string()
+                button: sp[9].to_string().trim().to_string().
+                hr: sp[10].to_string().trim().to_string()
             }
 
         },
@@ -186,6 +221,7 @@ fn main() {
         let mut form_mode = false; // If user toggled form mode
         let mut col_index: u8 = 1; // Keeping tracking of column index
         let mut dashes: u8 = 0; // Keep track of dash count
+        let mut working = Working::new('\0', &String::new());
 
         // Iterate over characters in string
         for (i, c) in line.chars().enumerate() {
@@ -194,8 +230,9 @@ fn main() {
                 '-' => {
                     dashes += 1;
                     if dashes == 3 {
+                        working = Working::new('\0', &template.hr);
                         row.get_col(col_index-1)
-                            .append_str("<hr/>");
+                            .append_str(working.compile().as_str());
                         break;
                     }
                 },
@@ -218,25 +255,35 @@ fn main() {
                         row.get_col(col_index-1).append(c);
                     }
                 },
-                '<' => row.get_col(col_index-1)
-                        .append_str("<label>"),
-                '>' => row.get_col(col_index-1)
-                        .append_str("</label>"),
-                '[' => row.get_col(col_index-1)
-                        .append_str("<input type=\"text\" value=\""),
-                ']' => row.get_col(col_index-1)
-                        .append_str("\">"),
-                '{' => row.get_col(col_index-1)
-                        .append_str("<textarea>"),
-                '}' => row.get_col(col_index-1)
-                        .append_str("</textarea>"),
-                '@' => row.get_col(col_index-1)
-                        .append_str("<input type=\"radio\">"),
-                '(' => row.get_col(col_index-1)
-                        .append_str("<button class=\"btn\">"),
-                ')' => row.get_col(col_index-1)
-                        .append_str("</button>"),
-                _ => row.get_col(col_index-1).append(c)
+                '@' => {
+                    working = Working::new('\0', &template.radio);
+                    row.get_col(col_index-1)
+                        .append_str(working.compile().as_str());
+                },
+                '*' => {
+                    working = Working::new('\0', &template.checkbox);
+                    row.get_col(col_index-1)
+                        .append_str(working.compile().as_str());
+                },
+                c if c == '<' && form_mode
+                    => working = Working::new('>', &template.label),
+                c if c == '[' && form_mode
+                    => working = Working::new(']', &template.text),
+                c if c == '{' && form_mode
+                    => working = Working::new('}', &template.textarea),
+                c if c == '(' && form_mode
+                    => working = Working::new(')', &template.button),
+                // Handle the case we are working towards the end goal of an
+                // incoming char
+                c if c == working.until => row.get_col(col_index-1)
+                        .append_str(working.compile().as_str()),
+                _ => {
+                    if working.is_working() {
+                        working.append(c);
+                    } else {
+                        row.get_col(col_index-1).append(c)
+                    }
+                }
             }
         }
     }
