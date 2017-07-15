@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, Read};
-use handlebars::Handlebars;
+use handlebars::{Handlebars, to_json};
 
 extern crate handlebars;
 
@@ -96,7 +96,8 @@ struct Template {
     radio: String,
     textarea: String,
     hr: String,
-    button: String
+    button: String,
+    select: String 
 }
 
 #[derive(PartialEq)]
@@ -113,7 +114,8 @@ enum Type {
     Input(InputType),
     Button,
     Label,
-    Hr
+    Hr,
+    Select
 }
 
 struct Working {
@@ -141,6 +143,7 @@ impl Working {
             Type::Button => template.button.as_str(),
             Type::Label => template.label.as_str(),
             Type::Hr => template.hr.as_str(),
+            Type::Select => template.select.as_str(),
             Type::Input(ref t) => match t {
                 &InputType::Text => template.text.as_str(),
                 &InputType::Radio => template.radio.as_str(),
@@ -162,7 +165,14 @@ impl Working {
 
         // Bind data to template
         let mut data = BTreeMap::new();
-        data.insert("value".to_string(), &self.str);
+        let val = match self.work_type {
+            Type::Select => {
+                let options: Vec<&str> = self.str.split(",").collect();
+                to_json(&options)
+            },
+            _ => to_json(&self.str)
+        };
+        data.insert("value".to_string(), val);
         handlebars.render("tmpl", &data).unwrap()
     }
 }
@@ -209,20 +219,21 @@ fn main() {
 
             Template {
                 container_start: sp[0].to_string().trim().to_string(),
-                container_end: sp[14].to_string().trim().to_string(),
                 row_start: sp[1].to_string().trim().to_string(),
-                row_end: sp[13].to_string().trim().to_string(),
                 col_start: sp[2].to_string().trim().to_string(),
-                col_end: sp[12].to_string().trim().to_string(),
                 segment_start: sp[3].to_string().trim().to_string(),
-                segment_end: sp[11].to_string().trim().to_string(),
-                label: sp[4].to_string().trim().to_string(),
-                text: sp[5].to_string().trim().to_string(),
-                checkbox: sp[6].to_string().trim().to_string(),
-                radio: sp[7].to_string().trim().to_string(),
-                textarea: sp[8].to_string().trim().to_string(),
-                button: sp[9].to_string().trim().to_string(),
-                hr: sp[10].to_string().trim().to_string()
+                segment_end: sp[4].to_string().trim().to_string(),
+                col_end: sp[5].to_string().trim().to_string(),
+                row_end: sp[6].to_string().trim().to_string(),
+                container_end: sp[7].to_string().trim().to_string(),
+                label: sp[8].to_string().trim().to_string(),
+                text: sp[9].to_string().trim().to_string(),
+                checkbox: sp[10].to_string().trim().to_string(),
+                radio: sp[11].to_string().trim().to_string(),
+                textarea: sp[12].to_string().trim().to_string(),
+                button: sp[13].to_string().trim().to_string(),
+                select: sp[14].to_string().trim().to_string(),
+                hr: sp[15].to_string().trim().to_string()
             }
 
         },
@@ -241,7 +252,8 @@ fn main() {
             radio: "<input type=\"radio\"/>".to_string(),
             textarea: "<textarea>{{value}}</textarea>".to_string(),
             hr: "<hr/>".to_string(),
-            button: "<button>{{value}}</button>".to_string()
+            button: "<button>{{value}}</button>".to_string(),
+            select: "<select>{{value}}</select>".to_string()
         }
     };
 
@@ -302,6 +314,8 @@ fn main() {
                     => working = Working::new('}', Type::Label),
                 c if c == '(' && form_mode
                     => working = Working::new(')', Type::Button),
+                c if c == '<' && form_mode
+                    => working = Working::new('>', Type::Select),
 
                 // Handle input type and we are waiting for mode qualifier
                 c if c != working.until
