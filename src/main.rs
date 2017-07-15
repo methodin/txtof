@@ -253,7 +253,7 @@ fn main() {
             textarea: "<textarea>{{value}}</textarea>".to_string(),
             hr: "<hr/>".to_string(),
             button: "<button>{{value}}</button>".to_string(),
-            select: "<select>{{value}}</select>".to_string()
+            select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string()
         }
     };
 
