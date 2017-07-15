@@ -1,6 +1,7 @@
 use std::io::{self, Read};
 use std::env;
 use std::fmt;
+use std::fs::File;
 
 struct Col {
     pub buffers: Vec<String>
@@ -28,14 +29,18 @@ impl Col {
             self.append(chr);
         }
     }
-    fn out(&self) -> String {
+    fn out(&self, template: &Template) -> String {
         let mut out: String = String::new();
 
-        out.push_str("<div class=\"col\">");
+        out.push_str(template.col_start.as_str());
         for ref buf in self.buffers.iter() {
-            out.push_str(format!("<div>{}</div>", buf).as_str());
+            out.push_str(format!("{}{}{}",
+                    template.segment_start.as_str(),
+                    buf,
+                    template.segment_end.as_str()
+                ).as_str());
         }
-        out.push_str("</div>");
+        out.push_str(template.col_end.as_str());
 
         out
     }
@@ -59,15 +64,15 @@ impl Row {
         row.add_col(Col::new());
         row
     }
-    fn out(&self) -> String {
+    fn out(&self, template: &Template) -> String {
         let mut out: String = String::new();
 
-        out.push_str("<div class=\"row\">");
+        out.push_str(template.row_start.as_str());
         for ref col in self.cols.iter() {
-            let formatted = format!("{}", col.out()); 
+            let formatted = format!("{}", col.out(template)); 
             out.push_str(formatted.as_str());
         }
-        out.push_str("</div>");
+        out.push_str(template.row_end.as_str());
 
         out
     }
@@ -116,28 +121,40 @@ fn main() {
 
     // Check arg for template
     let template = match env::args().nth(1) {
-        /*
         Some(file) => {
+            let dir = env::current_dir().unwrap();
+            let template_file = format!("{}/{}", dir.display(), file);
+
+            let mut in_file = match File::open(&template_file) {
+                Err(why) => panic!("Unable to open template file"),
+                Ok(file) => file,
+            };
+
+            let mut content = String::new();
+            in_file.read_to_string(&mut content)
+                .expect("Unable to process template file");
+
+            let sp: Vec<&str> = content.split("\n").collect();
+
             Template {
-                container_start: "",
-                container_end: "",
-                row_start: "<div>",
-                row_end: "</div>",
-                col_start: "<span>",
-                col_end: "</span>",
-                segment_start: "",
-                segment_end: "<br/>",
-                label: "<label>{[value}}</label>",
-                text: "<input type=\"text\" value=\"{{value}}\"/>",
-                checkbox: "<input type=\"checkbox\"/>",
-                radio: "<input type=\"radio\"/>",
-                textarea: "<textarea>{{value}}</textarea>",
-                hr: "<hr/>",
-                button: "<button>{{value}}</button>"
+                container_start: sp[0].to_string().trim().to_string(),
+                container_end: sp[14].to_string().trim().to_string(),
+                row_start: sp[1].to_string().trim().to_string(),
+                row_end: sp[13].to_string().trim().to_string(),
+                col_start: sp[2].to_string().trim().to_string(),
+                col_end: sp[12].to_string().trim().to_string(),
+                segment_start: sp[3].to_string().trim().to_string(),
+                segment_end: sp[11].to_string().trim().to_string(),
+                label: sp[4].to_string().trim().to_string(),
+                text: sp[5].to_string().trim().to_string(),
+                checkbox: sp[6].to_string().trim().to_string(),
+                radio: sp[7].to_string().trim().to_string(),
+                textarea: sp[8].to_string().trim().to_string(),
+                hr: sp[9].to_string().trim().to_string(),
+                button: sp[10].to_string().trim().to_string()
             }
 
         },
-        */
         _ => Template {
             container_start: "".to_string(),
             container_end: "".to_string(),
@@ -224,9 +241,9 @@ fn main() {
         }
     }
     
-    println!("<div class=\"container\">");
+    println!("{}", template.container_start);
     for row in rows {
-        println!("{}", row.out());
+        println!("{}", row.out(&template));
     }
-    println!("</div>");
+    println!("{}", template.container_end);
 }
