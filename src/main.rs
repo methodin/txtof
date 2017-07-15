@@ -99,17 +99,34 @@ struct Template {
     button: String
 }
 
+#[derive(PartialEq)]
+enum InputType {
+    Text,
+    Radio,
+    Checkbox,
+    Textarea
+}
+
+#[derive(PartialEq)]
+enum Type {
+    Unknown,
+    Input(InputType),
+    Button,
+    Label,
+    Hr
+}
+
 struct Working {
     str: String,
     until: char,
-    template: String
+    work_type: Type
 }
 impl Working {
-    fn new(until: char, template: &String) -> Working {
+    fn new(until: char, work_type: Type) -> Working {
         Working {
             str: String::new(),
             until: until,
-            template: template.clone()
+            work_type: work_type
         }
     }
     fn is_working(&self) -> bool {
@@ -118,10 +135,29 @@ impl Working {
     fn append(&mut self, chr: char) {
         self.str.push(chr);
     }
-    fn compile(&self) -> String {
+    fn compile(&mut self, template: &Template) -> String {
+        // Convert type to template
+        let ref template = match self.work_type {
+            Type::Button => template.button.as_str(),
+            Type::Label => template.label.as_str(),
+            Type::Hr => template.hr.as_str(),
+            Type::Input(ref t) => match t {
+                &InputType::Text => template.text.as_str(),
+                &InputType::Radio => template.radio.as_str(),
+                &InputType::Checkbox => template.checkbox.as_str(),
+                &InputType::Textarea => template.textarea.as_str()
+            },
+            _ => ""
+        };
+
+        // No actual template available
+        if template.is_empty() {
+            return String::new();
+        }
+
         // Compile template
         let mut handlebars = Handlebars::new();
-        assert!(handlebars.register_template_string("tmpl", self.template.as_str())
+        assert!(handlebars.register_template_string("tmpl", template)
             .is_ok());
 
         // Bind data to template
@@ -185,7 +221,7 @@ fn main() {
                 checkbox: sp[6].to_string().trim().to_string(),
                 radio: sp[7].to_string().trim().to_string(),
                 textarea: sp[8].to_string().trim().to_string(),
-                button: sp[9].to_string().trim().to_string().
+                button: sp[9].to_string().trim().to_string(),
                 hr: sp[10].to_string().trim().to_string()
             }
 
@@ -221,7 +257,7 @@ fn main() {
         let mut form_mode = false; // If user toggled form mode
         let mut col_index: u8 = 1; // Keeping tracking of column index
         let mut dashes: u8 = 0; // Keep track of dash count
-        let mut working = Working::new('\0', &String::new());
+        let mut working = Working::new('\0', Type::Unknown);
 
         // Iterate over characters in string
         for (i, c) in line.chars().enumerate() {
@@ -230,12 +266,15 @@ fn main() {
                 '-' => {
                     dashes += 1;
                     if dashes == 3 {
-                        working = Working::new('\0', &template.hr);
-                        row.get_col(col_index-1)
-                            .append_str(working.compile().as_str());
+                        row.get_col(col_index-1).append_str(
+                            Working::new('\0', Type::Hr)
+                                .compile(&template).as_str()
+                            );
                         break;
                     }
                 },
+
+                // Controlling form modes
                 '|' => {
                     if i == 0 {
                         form_mode = true;
@@ -255,28 +294,42 @@ fn main() {
                         row.get_col(col_index-1).append(c);
                     }
                 },
-                '@' => {
-                    working = Working::new('\0', &template.radio);
-                    row.get_col(col_index-1)
-                        .append_str(working.compile().as_str());
-                },
-                '*' => {
-                    working = Working::new('\0', &template.checkbox);
-                    row.get_col(col_index-1)
-                        .append_str(working.compile().as_str());
-                },
-                c if c == '<' && form_mode
-                    => working = Working::new('>', &template.label),
+
+                // Handle items that have a counterpart
                 c if c == '[' && form_mode
-                    => working = Working::new(']', &template.text),
+                    => working = Working::new(']', Type::Unknown),
                 c if c == '{' && form_mode
-                    => working = Working::new('}', &template.textarea),
+                    => working = Working::new('}', Type::Label),
                 c if c == '(' && form_mode
-                    => working = Working::new(')', &template.button),
+                    => working = Working::new(')', Type::Button),
+
+                // Handle input type and we are waiting for mode qualifier
+                c if c != working.until
+                    && working.until != '\0'
+                    && working.work_type == Type::Unknown =>
+                        match c {
+                            'o' => working.work_type = Type::Input(
+                                InputType::Radio),
+                            '/' => working.work_type = Type::Input(
+                                InputType::Checkbox),
+                            '+' => working.work_type = Type::Input(
+                                InputType::Textarea),
+                            c => {
+                                working.work_type = Type::Input(
+                                    InputType::Text);
+                                working.append(c);
+                            },
+                        },
+
                 // Handle the case we are working towards the end goal of an
                 // incoming char
-                c if c == working.until => row.get_col(col_index-1)
-                        .append_str(working.compile().as_str()),
+                c if c == working.until => {
+                    row.get_col(col_index-1)
+                        .append_str(working.compile(&template).as_str());
+                    working = Working::new('\0', Type::Unknown);
+                },
+                
+                // In any other scenario we are building strings
                 _ => {
                     if working.is_working() {
                         working.append(c);
