@@ -33,7 +33,7 @@ txtof ~/boostrap4.tmpl < example.txt
 ```
 # Templates
 
-The template system runs on handlebars but also has some static rows. The ordering of the rows is important as each type of template maps to a specific line
+The template system runs on handlebars but also has some static rows. The ordering of the rows is important as each type of template maps to a specific line. Spacing is arbitrary and only for readability. Templates do not span more than one line.
 
 A bootstrap4 example is below:
 
