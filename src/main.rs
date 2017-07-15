@@ -203,10 +203,7 @@ fn main() {
     // Check arg for template
     let template = match env::args().nth(1) {
         Some(file) => {
-            let dir = env::current_dir().unwrap();
-            let template_file = format!("{}/{}", dir.display(), file);
-
-            let mut in_file = match File::open(&template_file) {
+            let mut in_file = match File::open(&file) {
                 Err(_) => panic!("Unable to open template file"),
                 Ok(file) => file,
             };
