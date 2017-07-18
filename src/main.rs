@@ -99,6 +99,28 @@ struct Template {
     button: String,
     select: String 
 }
+impl Template {
+    fn from_vec(vec: &Vec<&str>) -> Template {
+        Template {
+            container_start: vec[0].to_string().trim().to_string(),
+            row_start: vec[1].to_string().trim().to_string(),
+            col_start: vec[2].to_string().trim().to_string(),
+            segment_start: vec[3].to_string().trim().to_string(),
+            segment_end: vec[4].to_string().trim().to_string(),
+            col_end: vec[5].to_string().trim().to_string(),
+            row_end: vec[6].to_string().trim().to_string(),
+            container_end: vec[7].to_string().trim().to_string(),
+            label: vec[8].to_string().trim().to_string(),
+            text: vec[9].to_string().trim().to_string(),
+            checkbox: vec[10].to_string().trim().to_string(),
+            radio: vec[11].to_string().trim().to_string(),
+            textarea: vec[12].to_string().trim().to_string(),
+            button: vec[13].to_string().trim().to_string(),
+            select: vec[14].to_string().trim().to_string(),
+            hr: vec[15].to_string().trim().to_string()
+        }
+    }
+}
 
 #[derive(PartialEq)]
 enum InputType {
@@ -168,6 +190,8 @@ impl Working {
         let val = match self.work_type {
             Type::Select => {
                 let options: Vec<&str> = self.str.split(",").collect();
+                //let v: Vec<&str> = self.str.split(",").collect();
+                //let options: Vec<_> = v.iter().map(|o| ).collect();
                 to_json(&options)
             },
             _ => to_json(&self.str)
@@ -214,43 +238,31 @@ fn main() {
 
             let sp: Vec<&str> = content.split("\n").collect();
 
-            Template {
-                container_start: sp[0].to_string().trim().to_string(),
-                row_start: sp[1].to_string().trim().to_string(),
-                col_start: sp[2].to_string().trim().to_string(),
-                segment_start: sp[3].to_string().trim().to_string(),
-                segment_end: sp[4].to_string().trim().to_string(),
-                col_end: sp[5].to_string().trim().to_string(),
-                row_end: sp[6].to_string().trim().to_string(),
-                container_end: sp[7].to_string().trim().to_string(),
-                label: sp[8].to_string().trim().to_string(),
-                text: sp[9].to_string().trim().to_string(),
-                checkbox: sp[10].to_string().trim().to_string(),
-                radio: sp[11].to_string().trim().to_string(),
-                textarea: sp[12].to_string().trim().to_string(),
-                button: sp[13].to_string().trim().to_string(),
-                select: sp[14].to_string().trim().to_string(),
-                hr: sp[15].to_string().trim().to_string()
-            }
-
+            Template::from_vec(&sp)
         },
-        _ => Template {
-            container_start: "".to_string(),
-            container_end: "".to_string(),
-            row_start: "<div>".to_string(),
-            row_end: "</div>".to_string(),
-            col_start: "<span>".to_string(),
-            col_end: "</span>".to_string(),
-            segment_start: "".to_string(),
-            segment_end: "<br/>".to_string(),
-            label: "<label>{[value}}</label>".to_string(),
-            text: "<input type=\"text\" value=\"{{value}}\"/>".to_string(),
-            checkbox: "<input type=\"checkbox\"/>".to_string(),
-            radio: "<input type=\"radio\"/>".to_string(),
-            textarea: "<textarea>{{value}}</textarea>".to_string(),
-            hr: "<hr/>".to_string(),
-            button: "<button>{{value}}</button>".to_string(),
-            select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string()
+        _ => match env::var("template") {
+            Ok(val) => {
+                let tv: Vec<&str> = val.split(",").collect();
+                Template::from_vec(&tv)
+            },
+            _ => Template {
+                container_start: "".to_string(),
+                container_end: "".to_string(),
+                row_start: "<div>".to_string(),
+                row_end: "</div>".to_string(),
+                col_start: "<span>".to_string(),
+                col_end: "</span>".to_string(),
+                segment_start: "".to_string(),
+                segment_end: "<br/>".to_string(),
+                label: "<label>{[value}}</label>".to_string(),
+                text: "<input type=\"text\" value=\"{{value}}\"/>".to_string(),
+                checkbox: "<input type=\"checkbox\"/>".to_string(),
+                radio: "<input type=\"radio\"/>".to_string(),
+                textarea: "<textarea>{{value}}</textarea>".to_string(),
+                hr: "<hr/>".to_string(),
+                button: "<button>{{value}}</button>".to_string(),
+                select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string()
+            }
         }
     };
 
@@ -351,10 +363,12 @@ fn main() {
             }
         }
     }
+
+    rows.push(row);
     
-    println!("{}", template.container_start);
+    print!("{}", template.container_start);
     for row in rows {
-        println!("{}", row.out(&template));
+        print!("{}", row.out(&template));
     }
     println!("{}", template.container_end);
 }

@@ -5,6 +5,16 @@ Simple text-based form generator for prototyping
 
 txtof accepts standard input (e.g. via | or <) as well as an optional parameter for a template path
 
+## Lambda
+
+This code is built to run on AWS Lambda as well as through the console. You can tweak the lambda.js function contained in the project and make sure you have the handler set to **lambda.handler** in your Lambda config.
+
+You can also use the Lambda environment veriable section to pass in a comma-separated template setup like below using hte key **template**:
+
+```
+<div class="container">,<div class="row">,<div class="col">,<div>,</div>,</div>,</div>,</div>,<label>{{value}}</label>,<input type="text" class="form-control" value="{{value}}"/>,<label class="form-check-label"><input type="checkbox" class="form-check-input"/>{{value}}</label>,<label class="form-check-label"><input type="radio" class="form-check-input"/>{{value}}</label>,<textarea class="form-control">{{value}}</textarea>,<button class="btn btn-primary">{{value}}</button>,<select class="form-control">{{#each value}}<option>{{this}}</option>{{/each}}</select>,<hr/>
+```
+
 ## Command examples
 
 Running simple via pipe
@@ -55,6 +65,9 @@ A bootstrap4 example is below:
 <select class="form-control">{{#each value}}<option>{{this}}</option>{{/each}}</select>
 <hr/>
 ```
+
+You can also use the environment variable **template** to pass in a template. In this form the template should be delimitted by a comma rather than a newline
+
 # Full example
 
 A complete feature-set of supported features is below:
