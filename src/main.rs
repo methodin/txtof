@@ -153,6 +153,7 @@ struct Template {
     textarea: String,
     hr: String,
     button: String,
+    a: String,
     select: String 
 }
 impl Template {
@@ -174,8 +175,9 @@ impl Template {
             radio: vec[13].to_string().trim().to_string(),
             textarea: vec[14].to_string().trim().to_string(),
             button: vec[15].to_string().trim().to_string(),
-            select: vec[16].to_string().trim().to_string(),
-            hr: vec[17].to_string().trim().to_string()
+            a: vec[16].to_string().trim().to_string(),
+            select: vec[17].to_string().trim().to_string(),
+            hr: vec[18].to_string().trim().to_string()
         }
     }
 }
@@ -189,10 +191,17 @@ enum InputType {
 }
 
 #[derive(PartialEq)]
+enum ButtonType {
+    Unknown,
+    Button,
+    A
+}
+
+#[derive(PartialEq)]
 enum Type {
     Unknown,
     Input(InputType),
-    Button,
+    Button(ButtonType),
     Label,
     Hr,
     Select
@@ -220,7 +229,11 @@ impl Working {
     fn compile(&mut self, template: &Template) -> String {
         // Convert type to template
         let ref template = match self.work_type {
-            Type::Button => template.button.as_str(),
+            Type::Button(ref t) => match t {
+                &ButtonType::Button => template.button.as_str(),
+                &ButtonType::A => template.a.as_str(),
+                _ => ""
+            },
             Type::Label => template.label.as_str(),
             Type::Hr => template.hr.as_str(),
             Type::Select => template.select.as_str(),
@@ -239,7 +252,7 @@ impl Working {
         }
 
         let config = match self.work_type {
-            Type::Button => {
+            Type::Button(_) => {
                 let split: Vec<String> = self.str.split("->").map(|s| s.to_string()).collect();
                 to_json(&ButtonConfig {
                     value: split[0].trim().to_owned(),
@@ -331,6 +344,7 @@ fn main() {
                 textarea: "<textarea>{{value}}</textarea>".to_string(),
                 hr: "<hr/>".to_string(),
                 button: "<button data-trigger=\"{{trigger}}\">{{value}}</button>".to_string(),
+                a: "<a href=\"#\" data-trigger=\"{{trigger}}\">{{value}}</a>".to_string(),
                 select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string()
             }
         }
@@ -394,8 +408,20 @@ fn main() {
                 // Handle items that have a counterpart
                 c if c == '[' && form_mode => working = Working::new(']', Type::Unknown),
                 c if c == '{' && form_mode => working = Working::new('}', Type::Label),
-                c if c == '(' && form_mode => working = Working::new(')', Type::Button),
+                c if c == '(' && form_mode => working = Working::new(')', Type::Button(ButtonType::Unknown)),
                 c if c == '<' && form_mode => working = Working::new('>', Type::Select),
+
+                // Handle button type and we are waiting for mode qualifier
+                c if c != working.until
+                    && working.until != '\0'
+                    && working.work_type == Type::Button(ButtonType::Unknown) =>
+                        match c {
+                            '#' => working.work_type = Type::Button(ButtonType::A),
+                            c => {
+                                working.work_type = Type::Button(ButtonType::Button);
+                                working.append(c);
+                            },
+                        },
 
                 // Handle input type and we are waiting for mode qualifier
                 c if c != working.until
