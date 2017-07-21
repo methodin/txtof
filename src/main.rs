@@ -1,10 +1,29 @@
-use std::collections::BTreeMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, Read};
 use handlebars::{Handlebars, to_json};
 
 extern crate handlebars;
+
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ButtonConfig {
+    value: String,
+    trigger: String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ManyConfig {
+    value: Vec<String>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct GeneralConfig {
+    value: String
+}
 
 struct Col {
     pub buffers: Vec<String>
@@ -102,14 +121,15 @@ impl Page {
     fn out(&self, template: &Template) -> String {
         let mut out: String = String::new();
 
-        out.push_str(render_template(template.container_start.as_str(), &Type::Page, &self.name).as_str());
+        let config = to_json(&GeneralConfig {value: self.name.to_string()});
+        out.push_str(render_template(template.container_start.as_str(), &config).as_str());
 
         for ref row in self.rows.iter() {
             let formatted = format!("{}", row.out(template)); 
             out.push_str(formatted.as_str());
         }
 
-        out.push_str(render_template(template.container_end.as_str(), &Type::Page, &self.name).as_str());
+        out.push_str(render_template(template.container_end.as_str(), &config).as_str());
 
         out
     }
@@ -171,7 +191,6 @@ enum InputType {
 #[derive(PartialEq)]
 enum Type {
     Unknown,
-    Page,
     Input(InputType),
     Button,
     Label,
@@ -201,7 +220,6 @@ impl Working {
     fn compile(&mut self, template: &Template) -> String {
         // Convert type to template
         let ref template = match self.work_type {
-            Type::Page => template.container_start.as_str(),
             Type::Button => template.button.as_str(),
             Type::Label => template.label.as_str(),
             Type::Hr => template.hr.as_str(),
@@ -220,51 +238,30 @@ impl Working {
             return String::new();
         }
 
-        render_template(template, &self.work_type, &self.str)
+        let config = match self.work_type {
+            Type::Button => {
+                let split: Vec<String> = self.str.split("->").map(|s| s.to_string()).collect();
+                to_json(&ButtonConfig {
+                    value: split[0].trim().to_owned(),
+                    trigger: if split.len() > 1 { split[1].trim().to_owned() } else { "".to_string() }
+                })
+            },
+            Type::Select => to_json(&ManyConfig {value: self.str.split(",").map(|s| s.to_owned()).collect()}),
+            _ => to_json(&GeneralConfig {value: self.str.to_string()})
+        };
+
+        render_template(template, &config)
     }
 }
 
-fn render_template(template: &str, work_type: &Type, str: &String) -> String {
-    let val = match *work_type {
-        Type::Select => {
-            let options: Vec<&str> = str.split(",").collect();
-            //let v: Vec<&str> = self.str.split(",").collect();
-            //let options: Vec<_> = v.iter().map(|o| ).collect();
-            to_json(&options)
-        },
-        _ => to_json(&str)
-    };
-
+fn render_template(template: &str, val: &serde_json::value::Value) -> String {
     // Compile template
     let mut handlebars = Handlebars::new();
     assert!(handlebars.register_template_string("tmpl", template)
         .is_ok());
 
-    // Bind data to template
-    let mut data = BTreeMap::new();
-    data.insert("value".to_string(), val);
-    handlebars.render("tmpl", &data).unwrap()
+    handlebars.render("tmpl", &val).unwrap()
 }
-
-/*
-fn compile(rows: &mut Vec<Row>, pages: &mut HashMap<String, Box<String>>, template: &Template) {
-    if rows.len() == 0 {
-        return;
-    }
-
-    let mut content = String::new();
-    let mut page = String::new();
-
-    while rows.len() > 0 {
-        let row = rows.pop().unwrap();
-        content.push_str(format!("{}", row.out(&template)).as_str());
-        page = row.page.clone();
-    }
-
-    println!("New page {}", page);
-    pages.insert(page.to_string(), Box::new(content));
-}
-*/
 
 /** 
  * An empty line implies a new "row"
@@ -312,8 +309,14 @@ fn main() {
             },
             _ => Template {
                 head: "<script src=\"https://code.jquery.com/jquery-3.2.1.min.js\" integrity=\"sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=\" crossorigin=\"anonymous\"></script>".to_string(),
-                foot: "<script>$(function(){ $('#default').show(); });</script>".to_string(),
-                container_start: "<div id=\"{{value}}\" style=\"display:none\">".to_string(),
+                foot: "<script>$(function(){ $('#default').show(); \
+                    $('[data-trigger]').click(function(){ \
+                        $('[txtof-container]').hide(); \
+                        var trigger = $(this).data('trigger'); \
+                        $('#'+trigger).show(); \
+                    }); \
+                });</script>".to_string(),
+                container_start: "<div txtof-container id=\"{{value}}\" style=\"display:none\">".to_string(),
                 container_end: "</div>".to_string(),
                 row_start: "<div>".to_string(),
                 row_end: "</div>".to_string(),
@@ -327,7 +330,7 @@ fn main() {
                 radio: "<input type=\"radio\"/>".to_string(),
                 textarea: "<textarea>{{value}}</textarea>".to_string(),
                 hr: "<hr/>".to_string(),
-                button: "<button>{{value}}</button>".to_string(),
+                button: "<button data-trigger=\"{{trigger}}\">{{value}}</button>".to_string(),
                 select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string()
             }
         }
@@ -345,22 +348,18 @@ fn main() {
 
         let mut form_mode = false; // If user toggled form mode
         let mut col_index: u8 = 1; // Keeping tracking of column index
-        let mut dashes: u8 = 0; // Keep track of dash count
         let mut working = Working::new('\0', Type::Unknown);
 
         // Iterate over characters in string
         for (i, c) in line.chars().enumerate() {
             // Match c against known tokens
             match c {
-                '-' => {
-                    dashes += 1;
-                    if dashes == 3 {
-                        page.get_current_row().get_col(col_index-1).append_str(
-                            Working::new('\0', Type::Hr)
-                                .compile(&template).as_str()
-                            );
-                        break;
-                    }
+                '-' if i == 0 => {
+                    page.get_current_row().get_col(col_index-1).append_str(
+                        Working::new('\0', Type::Hr)
+                            .compile(&template).as_str()
+                        );
+                    break;
                 },
 
                 // New page
@@ -369,19 +368,7 @@ fn main() {
                     page = Page::new(line[1..].to_string());
                     break;
                 },
-                /*{
-                    
-                    row.get_col(col_index-1).append_str(
-                        Working::new('\n', Type::Page)
-                            .compile(&template).as_str()
-                        );
-                    //compile(&mut rows, &mut pages, &template);
-                    //page = &line[1..];
-                    //row = Row::new(page);
-                    break;
-                },
-                */
-
+                //
                 // Controlling form modes
                 '|' => {
                     let mut row = page.get_current_row();
@@ -405,26 +392,19 @@ fn main() {
                 },
 
                 // Handle items that have a counterpart
-                c if c == '[' && form_mode
-                    => working = Working::new(']', Type::Unknown),
-                c if c == '{' && form_mode
-                    => working = Working::new('}', Type::Label),
-                c if c == '(' && form_mode
-                    => working = Working::new(')', Type::Button),
-                c if c == '<' && form_mode
-                    => working = Working::new('>', Type::Select),
+                c if c == '[' && form_mode => working = Working::new(']', Type::Unknown),
+                c if c == '{' && form_mode => working = Working::new('}', Type::Label),
+                c if c == '(' && form_mode => working = Working::new(')', Type::Button),
+                c if c == '<' && form_mode => working = Working::new('>', Type::Select),
 
                 // Handle input type and we are waiting for mode qualifier
                 c if c != working.until
                     && working.until != '\0'
                     && working.work_type == Type::Unknown =>
                         match c {
-                            'o' => working.work_type = Type::Input(
-                                InputType::Radio),
-                            '/' => working.work_type = Type::Input(
-                                InputType::Checkbox),
-                            '+' => working.work_type = Type::Input(
-                                InputType::Textarea),
+                            'o' => working.work_type = Type::Input(InputType::Radio),
+                            '/' => working.work_type = Type::Input(InputType::Checkbox),
+                            '+' => working.work_type = Type::Input(InputType::Textarea),
                             c => {
                                 working.work_type = Type::Input(
                                     InputType::Text);
@@ -439,6 +419,7 @@ fn main() {
                         .append_str(working.compile(&template).as_str());
                     working = Working::new('\0', Type::Unknown);
                 },
+                
                 
                 // In any other scenario we are building strings
                 _ => {
