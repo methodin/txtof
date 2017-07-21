@@ -16,6 +16,13 @@ struct ButtonConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+struct InputTextConfig {
+    name: String,
+    placeholder: String,
+    value: String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct ManyConfig {
     value: Vec<String>
 }
@@ -154,7 +161,8 @@ struct Template {
     hr: String,
     button: String,
     a: String,
-    select: String 
+    select: String ,
+    bind: String
 }
 impl Template {
     fn from_vec(vec: &Vec<&str>) -> Template {
@@ -177,7 +185,8 @@ impl Template {
             button: vec[15].to_string().trim().to_string(),
             a: vec[16].to_string().trim().to_string(),
             select: vec[17].to_string().trim().to_string(),
-            hr: vec[18].to_string().trim().to_string()
+            hr: vec[18].to_string().trim().to_string(),
+            bind: vec[19].to_string().trim().to_string()
         }
     }
 }
@@ -204,7 +213,8 @@ enum Type {
     Button(ButtonType),
     Label,
     Hr,
-    Select
+    Select,
+    Bind
 }
 
 struct Working {
@@ -235,6 +245,7 @@ impl Working {
                 _ => ""
             },
             Type::Label => template.label.as_str(),
+            Type::Bind => template.bind.as_str(),
             Type::Hr => template.hr.as_str(),
             Type::Select => template.select.as_str(),
             Type::Input(ref t) => match t {
@@ -252,6 +263,19 @@ impl Working {
         }
 
         let config = match self.work_type {
+            Type::Input(InputType::Text) => {
+                let split: Vec<String> = self.str.split("?").map(|s| s.to_string()).collect();
+                let value = split[0].trim().to_owned();
+                let placeholder = if split.len() > 1 { split[1].trim().to_owned() } else { "".to_string() };
+
+                let split: Vec<String> = self.str.split("->").map(|s| s.to_string()).collect();
+
+                to_json(&InputTextConfig {
+                    name: if split.len() > 1 { split[1].trim().to_owned() } else { "".to_string()} ,
+                    value: value,
+                    placeholder: placeholder
+                })
+            },
             Type::Button(_) => {
                 let split: Vec<String> = self.str.split("->").map(|s| s.to_string()).collect();
                 to_json(&ButtonConfig {
@@ -321,15 +345,29 @@ fn main() {
                 Template::from_vec(&tv)
             },
             _ => Template {
-                head: "<script src=\"https://code.jquery.com/jquery-3.2.1.min.js\" integrity=\"sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=\" crossorigin=\"anonymous\"></script>".to_string(),
-                foot: "<script>$(function(){ $('#default').show(); \
-                    $('[data-trigger]').click(function(){ \
-                        $('[txtof-container]').hide(); \
-                        var trigger = $(this).data('trigger'); \
-                        $('#'+trigger).show(); \
-                    }); \
+                head: "<script src=\"https://code.jquery.com/jquery-3.2.1.min.js\" integrity=\"sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=\" crossorigin=\"anonymous\"></script> \
+                    <style>[txtof-container] {display: none} :target {display: block}</style>
+                ".to_string(),
+                foot: "<script>$(function(){ \
+                          if (!window.location.hash) { \
+                            localStorage.removeItem('txtof'); \
+                            window.location.hash = 'default'; \
+                          } \
+                          $(window).on('hashchange', function(e) { \
+                            var data = JSON.parse(localStorage.getItem('txtof')) || {}; \
+                            for (var key in data) { \
+                              $('[name=\"'+key+'\"]').val(data[key]); \
+                              $('[data-bind=\"'+key+'\"]').html(data[key]); \
+                            } \
+                          }); \
+                          $(document).on('click', '[data-target]', function(){ \
+                            var data = JSON.parse(localStorage.getItem('txtof')) || {}; \
+                            data = $(this).closest('[txtof-container]').find(':input').serializeArray().reduce(function(m,o){m[o.name] = o.value; return m;}, data); \
+                            localStorage.setItem('txtof', JSON.stringify(data)); \
+                            window.location.hash = $(this).data('target');  \
+                          }); \
                 });</script>".to_string(),
-                container_start: "<div txtof-container id=\"{{value}}\" style=\"display:none\">".to_string(),
+                container_start: "<div txtof-container id=\"{{value}}\">".to_string(),
                 container_end: "</div>".to_string(),
                 row_start: "<div>".to_string(),
                 row_end: "</div>".to_string(),
@@ -337,15 +375,16 @@ fn main() {
                 col_end: "</span>".to_string(),
                 segment_start: "".to_string(),
                 segment_end: "<br/>".to_string(),
-                label: "<label>{[value}}</label>".to_string(),
-                text: "<input type=\"text\" value=\"{{value}}\"/>".to_string(),
+                label: "<label>{{value}}</label>".to_string(),
+                text: "<input name=\"{{name}}\" type=\"text\" placeholder=\"{{placeholder}}\" value=\"{{value}}\"/>".to_string(),
                 checkbox: "<input type=\"checkbox\"/>".to_string(),
                 radio: "<input type=\"radio\"/>".to_string(),
                 textarea: "<textarea>{{value}}</textarea>".to_string(),
                 hr: "<hr/>".to_string(),
-                button: "<button data-trigger=\"{{trigger}}\">{{value}}</button>".to_string(),
-                a: "<a href=\"#\" data-trigger=\"{{trigger}}\">{{value}}</a>".to_string(),
-                select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string()
+                button: "<button data-target=\"{{trigger}}\">{{value}}</button>".to_string(),
+                a: "<a href=\"#{{trigger}}\">{{value}}</a>".to_string(),
+                select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string(),
+                bind: "<span data-bind=\"{{value}}\"></span>".to_string()
             }
         }
     };
@@ -368,11 +407,14 @@ fn main() {
         for (i, c) in line.chars().enumerate() {
             // Match c against known tokens
             match c {
+                // Separator, ignore
+                '=' if i == 0 => break,
+
+                // Horizontal divider
                 '-' if i == 0 => {
                     page.get_current_row().get_col(col_index-1).append_str(
                         Working::new('\0', Type::Hr)
-                            .compile(&template).as_str()
-                        );
+                            .compile(&template).as_str());
                     break;
                 },
 
@@ -382,7 +424,7 @@ fn main() {
                     page = Page::new(line[1..].to_string());
                     break;
                 },
-                //
+
                 // Controlling form modes
                 '|' => {
                     let mut row = page.get_current_row();
@@ -410,6 +452,7 @@ fn main() {
                 c if c == '{' && form_mode => working = Working::new('}', Type::Label),
                 c if c == '(' && form_mode => working = Working::new(')', Type::Button(ButtonType::Unknown)),
                 c if c == '<' && form_mode => working = Working::new('>', Type::Select),
+                c if c == '%' && form_mode => working = Working::new(' ', Type::Bind),
 
                 // Handle button type and we are waiting for mode qualifier
                 c if c != working.until
