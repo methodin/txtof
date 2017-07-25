@@ -165,29 +165,30 @@ struct Template {
     bind: String
 }
 impl Template {
-    fn from_vec(vec: &Vec<&str>) -> Template {
-        Template {
-            head: vec[0].to_string().trim().to_string(),
-            foot: vec[1].to_string().trim().to_string(),
-            container_start: vec[2].to_string().trim().to_string(),
-            container_end: vec[3].to_string().trim().to_string(),
-            row_start: vec[4].to_string().trim().to_string(),
-            row_end: vec[5].to_string().trim().to_string(),
-            col_start: vec[6].to_string().trim().to_string(),
-            col_end: vec[7].to_string().trim().to_string(),
-            segment_start: vec[8].to_string().trim().to_string(),
-            segment_end: vec[9].to_string().trim().to_string(),
-            label: vec[10].to_string().trim().to_string(),
-            text: vec[11].to_string().trim().to_string(),
-            checkbox: vec[12].to_string().trim().to_string(),
-            radio: vec[13].to_string().trim().to_string(),
-            textarea: vec[14].to_string().trim().to_string(),
-            button: vec[15].to_string().trim().to_string(),
-            a: vec[16].to_string().trim().to_string(),
-            select: vec[17].to_string().trim().to_string(),
-            hr: vec[18].to_string().trim().to_string(),
-            bind: vec[19].to_string().trim().to_string()
-        }
+    fn format(s: &str) -> String {
+        s.trim().to_string()
+    }
+    fn from_vec(&mut self, vec: &Vec<&str>) {
+        if !vec[0].is_empty() { self.head = Template::format(vec[0]) }
+        if !vec[1].is_empty() { self.foot = Template::format(vec[1]) }
+        if !vec[2].is_empty() { self.container_start = Template::format(vec[2]) }
+        if !vec[3].is_empty() { self.container_end = Template::format(vec[3]) }
+        if !vec[4].is_empty() { self.row_start = Template::format(vec[4]) }
+        if !vec[5].is_empty() { self.row_end = Template::format(vec[5]) }
+        if !vec[6].is_empty() { self.col_start = Template::format(vec[6]) }
+        if !vec[7].is_empty() { self.col_end = Template::format(vec[7]) }
+        if !vec[8].is_empty() { self.segment_start = Template::format(vec[8]) }
+        if !vec[9].is_empty() { self.segment_end = Template::format(vec[9]) }
+        if !vec[10].is_empty() { self.label = Template::format(vec[10]) }
+        if !vec[11].is_empty() { self.text = Template::format(vec[11]) }
+        if !vec[12].is_empty() { self.checkbox = Template::format(vec[12]) }
+        if !vec[13].is_empty() { self.radio = Template::format(vec[13]) }
+        if !vec[14].is_empty() { self.textarea = Template::format(vec[14]) }
+        if !vec[15].is_empty() { self.hr = Template::format(vec[15]) }
+        if !vec[16].is_empty() { self.button = Template::format(vec[16]) }
+        if !vec[17].is_empty() { self.a = Template::format(vec[17]) }
+        if !vec[18].is_empty() { self.select = Template::format(vec[18]) }
+        if !vec[19].is_empty() { self.bind = Template::format(vec[19]) }
     }
 }
 
@@ -324,7 +325,49 @@ fn main() {
     let mut pages: Vec<Page> = Vec::new();
 
     // Check arg for template
-    let template = match env::args().nth(1) {
+    let mut template = Template {
+        head: "<script src=\"https://code.jquery.com/jquery-3.2.1.min.js\" integrity=\"sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=\" crossorigin=\"anonymous\"></script> \
+            <style>[txtof-container] {display: none} :target {display: block}</style>
+        ".to_string(),
+        foot: "<script>$(function(){ \
+                  if (!window.location.hash) { \
+                    localStorage.removeItem('txtof'); \
+                    window.location.hash = 'default'; \
+                  } \
+                  $(window).on('hashchange', function(e) { \
+                    var data = JSON.parse(localStorage.getItem('txtof')) || {}; \
+                    for (var key in data) { \
+                      $('[name=\"'+key+'\"]').val(data[key]); \
+                      $('[data-bind=\"'+key+'\"]').html(data[key]); \
+                    } \
+                  }); \
+                  $(document).on('click', '[data-target]', function(){ \
+                    var data = JSON.parse(localStorage.getItem('txtof')) || {}; \
+                    data = $(this).closest('[txtof-container]').find(':input').serializeArray().reduce(function(m,o){m[o.name] = o.value; return m;}, data); \
+                    localStorage.setItem('txtof', JSON.stringify(data)); \
+                    window.location.hash = $(this).data('target');  \
+                  }); \
+        });</script>".to_string(),
+        container_start: "<div txtof-container id=\"{{value}}\">".to_string(),
+        container_end: "</div>".to_string(),
+        row_start: "<div>".to_string(),
+        row_end: "</div>".to_string(),
+        col_start: "<span>".to_string(),
+        col_end: "</span>".to_string(),
+        segment_start: "".to_string(),
+        segment_end: "<br/>".to_string(),
+        label: "<label>{{value}}</label>".to_string(),
+        text: "<input name=\"{{name}}\" type=\"text\" placeholder=\"{{placeholder}}\" value=\"{{value}}\"/>".to_string(),
+        checkbox: "<input type=\"checkbox\"/>".to_string(),
+        radio: "<input type=\"radio\"/>".to_string(),
+        textarea: "<textarea>{{value}}</textarea>".to_string(),
+        hr: "<hr/>".to_string(),
+        button: "<button data-target=\"{{trigger}}\">{{value}}</button>".to_string(),
+        a: "<a href=\"#{{trigger}}\">{{value}}</a>".to_string(),
+        select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string(),
+        bind: "<span data-bind=\"{{value}}\"></span>".to_string()
+    };
+    match env::args().nth(1) {
         Some(file) => {
             let mut in_file = match File::open(&file) {
                 Err(_) => panic!("Unable to open template file"),
@@ -337,55 +380,14 @@ fn main() {
 
             let sp: Vec<&str> = content.split("\n").collect();
 
-            Template::from_vec(&sp)
+            template.from_vec(&sp);
         },
         _ => match env::var("template") {
             Ok(val) => {
                 let tv: Vec<&str> = val.split(",").collect();
-                Template::from_vec(&tv)
+                template.from_vec(&tv);
             },
-            _ => Template {
-                head: "<script src=\"https://code.jquery.com/jquery-3.2.1.min.js\" integrity=\"sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=\" crossorigin=\"anonymous\"></script> \
-                    <style>[txtof-container] {display: none} :target {display: block}</style>
-                ".to_string(),
-                foot: "<script>$(function(){ \
-                          if (!window.location.hash) { \
-                            localStorage.removeItem('txtof'); \
-                            window.location.hash = 'default'; \
-                          } \
-                          $(window).on('hashchange', function(e) { \
-                            var data = JSON.parse(localStorage.getItem('txtof')) || {}; \
-                            for (var key in data) { \
-                              $('[name=\"'+key+'\"]').val(data[key]); \
-                              $('[data-bind=\"'+key+'\"]').html(data[key]); \
-                            } \
-                          }); \
-                          $(document).on('click', '[data-target]', function(){ \
-                            var data = JSON.parse(localStorage.getItem('txtof')) || {}; \
-                            data = $(this).closest('[txtof-container]').find(':input').serializeArray().reduce(function(m,o){m[o.name] = o.value; return m;}, data); \
-                            localStorage.setItem('txtof', JSON.stringify(data)); \
-                            window.location.hash = $(this).data('target');  \
-                          }); \
-                });</script>".to_string(),
-                container_start: "<div txtof-container id=\"{{value}}\">".to_string(),
-                container_end: "</div>".to_string(),
-                row_start: "<div>".to_string(),
-                row_end: "</div>".to_string(),
-                col_start: "<span>".to_string(),
-                col_end: "</span>".to_string(),
-                segment_start: "".to_string(),
-                segment_end: "<br/>".to_string(),
-                label: "<label>{{value}}</label>".to_string(),
-                text: "<input name=\"{{name}}\" type=\"text\" placeholder=\"{{placeholder}}\" value=\"{{value}}\"/>".to_string(),
-                checkbox: "<input type=\"checkbox\"/>".to_string(),
-                radio: "<input type=\"radio\"/>".to_string(),
-                textarea: "<textarea>{{value}}</textarea>".to_string(),
-                hr: "<hr/>".to_string(),
-                button: "<button data-target=\"{{trigger}}\">{{value}}</button>".to_string(),
-                a: "<a href=\"#{{trigger}}\">{{value}}</a>".to_string(),
-                select: "<select>{{#each value}}<option>{{this}}</option>{{/each}}</select>".to_string(),
-                bind: "<span data-bind=\"{{value}}\"></span>".to_string()
-            }
+            _ => {}
         }
     };
 
