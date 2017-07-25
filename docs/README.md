@@ -4,35 +4,7 @@ There are a lot of tools in existence that make prototyping easy but they all ce
 # Usage
 This file is best used by either a tool like (CodePen)[http://codepen.io] or a (bookmarket)[http://www.fillmein.com]. 
 
-# Templates
-
-The template system runs on handlebars but also has some static rows. The ordering of the rows is important as each type of template maps to a specific line. Spacing is arbitrary and only for readability. Templates do not span more than one line.
-
-A bootstrap4 example is below:
-
-```html
-<div class="container">
-    <div class="row">
-        <div class="col">
-            <div>
-            </div>
-        </div>
-    </div>
-</div>
-<label>{{value}}</label>
-<input type="text" class="form-control" value="{{value}}"/>
-<label class="form-check-label"><input type="checkbox" class="form-check-input"/>{{value}}</label>
-<label class="form-check-label"><input type="radio" class="form-check-input"/>{{value}}</label>
-<textarea class="form-control">{{value}}</textarea>
-<button class="btn btn-primary">{{value}}</button>
-<select class="form-control">{{#each value}}<option>{{this}}</option>{{/each}}</select>
-<hr/>
-```
-
-You can also use the environment variable **template** to pass in a template. In this form the template should be delimitted by a comma rather than a newline
-
 # Full example
-
 A complete feature-set of supported features is below:
 
 ```
