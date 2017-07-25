@@ -1,4 +1,4 @@
-# txtof
+# hello
 Simple text-based form generator for prototyping
 
 # Usage
