@@ -1,46 +1,9 @@
-# hello
-Simple text-based form generator for prototyping
+# Text is king
+There are a lot of tools in existence that make prototyping easy but they all center around a GUI for creation and I wanted to make something based on text instead. Text allows you to run diffs, store anywhere and create a core set of symbols that can express many UI themes.
 
 # Usage
+This file is best used by either a tool like (CodePen)[http://codepen.io] or a (bookmarket)[http://www.fillmein.com]. 
 
-txtof accepts standard input (e.g. via | or <) as well as an optional parameter for a template path
-
-## Lambda
-
-This code is built to run on AWS Lambda as well as through the console. You can tweak the lambda.js function contained in the project and make sure you have the handler set to **lambda.handler** in your Lambda config.
-
-You can also use the Lambda environment veriable section to pass in a comma-separated template setup like below using hte key **template**:
-
-```
-<div class="container">,<div class="row">,<div class="col">,<div>,</div>,</div>,</div>,</div>,<label>{{value}}</label>,<input type="text" class="form-control" value="{{value}}"/>,<label class="form-check-label"><input type="checkbox" class="form-check-input"/>{{value}}</label>,<label class="form-check-label"><input type="radio" class="form-check-input"/>{{value}}</label>,<textarea class="form-control">{{value}}</textarea>,<button class="btn btn-primary">{{value}}</button>,<select class="form-control">{{#each value}}<option>{{this}}</option>{{/each}}</select>,<hr/>
-```
-
-## Command examples
-
-Running simple via pipe
-
-```sh
-echo "| (button)" | txtof
-
-<div><span> <button>button</button><br/></span></div>
-```
-
-Converting data from an input txt file
-
-```sh
-txtof < example.txt
-
-<div><span> <button>button</button><br/></span></div>
-```
-Using a custom template
-
-```sh
-txtof ~/boostrap4.tmpl < example.txt
-
-<div class="container">
-<div class="row"><div class="col"><div> <button class="btn btn-primary">button</button></div></div></div>
-</div>
-```
 # Templates
 
 The template system runs on handlebars but also has some static rows. The ordering of the rows is important as each type of template maps to a specific line. Spacing is arbitrary and only for readability. Templates do not span more than one line.
